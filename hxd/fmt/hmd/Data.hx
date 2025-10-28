@@ -14,9 +14,20 @@ enum Property<T> {
 	HasLod;
 	HasCollider;
 	HasColliders;
+	HasCustomCollider;
 }
 
 typedef Properties = Null<Array<Property<Dynamic>>>;
+
+enum abstract ColliderType(Int) from Int to Int {
+	var ConvexHulls = 0;
+	var Mesh = 1;
+	var Group = 2;
+	var Sphere = 3;
+	var Box = 4;
+	var Capsule = 5;
+	var Cylinder = 6;
+}
 
 class Position {
 	public var x : Float;
@@ -94,11 +105,68 @@ class BlendShape {
 }
 
 class Collider {
+	public var type : ColliderType;
+}
+
+class ConvexHullsCollider extends Collider {
 	public var vertexCounts : Array<Int>;
 	public var vertexPosition : DataPosition;
 	public var indexCounts : Array<Int>;
 	public var indexPosition : DataPosition;
 	public function new() {
+		type = ConvexHulls;
+	}
+}
+
+class MeshCollider extends Collider {
+	public var vertexCount : Int;
+	public var vertexPosition : DataPosition;
+	public var indexCount : Int;
+	public var indexPosition : DataPosition;
+	public function new() {
+		type = Mesh;
+	}
+}
+
+class GroupCollider extends Collider {
+	public var colliders : Array<Collider>;
+	public function new() {
+		type = Group;
+	}
+}
+
+class SphereCollider extends Collider {
+	public var position : h3d.Vector;
+	public var radius : Float;
+	public function new() {
+		type = Sphere;
+	}
+}
+
+class BoxCollider extends Collider {
+	public var position : h3d.Vector;
+	public var halfExtent : h3d.Vector;
+	public var rotation : h3d.Vector;
+	public function new() {
+		type = Box;
+	}
+}
+
+class CapsuleCollider extends Collider {
+	public var position : h3d.Vector;
+	public var halfExtent : h3d.Vector;
+	public var radius : Float;
+	public function new() {
+		type = Capsule;
+	}
+}
+
+class CylinderCollider extends Collider {
+	public var position : h3d.Vector;
+	public var halfExtent : h3d.Vector;
+	public var radius : Float;
+	public function new() {
+		type = Cylinder;
 	}
 }
 

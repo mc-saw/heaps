@@ -10,6 +10,22 @@ typedef CollideParams = {
 	?maxSubdiv : Int,
 	?maxConvexHulls : Int,
 	?mesh : String,
+	?shapes : Array<ShapeColliderParams>,
+}
+
+typedef ShapeColliderParams = {
+	type : ShapeColliderType,
+	position : h3d.Vector,
+	?halfExtent : h3d.Vector,
+	?rotation : h3d.Vector,
+	?radius : Float,
+}
+
+enum abstract ShapeColliderType(String) to String {
+	var Sphere;
+	var Box;
+	var Capsule;
+	var Cylinder;
 }
 
 class HMDOut extends BaseLibrary {
@@ -271,8 +287,10 @@ class HMDOut extends BaseLibrary {
 		hxd.tools.MeshOptimizer.remapIndexBuffer(indices, indices, indexCount, remap);
 		hxd.tools.MeshOptimizer.remapVertexBuffer(vertices, vertices, vertexCount, vertexSize, remap);
 		vertexCount = uniqueVertexCount;
-		if ( decimationFactor > 0.0 )
-			indexCount = hxd.tools.MeshOptimizer.simplify(indices, indices, indexCount, vertices, vertexCount, vertexSize, Std.int(indexCount * (1.0 - decimationFactor)), 0.05, 0, null);
+		if ( decimationFactor > 0.0 ) {
+			var options = hxd.tools.MeshOptimizer.SimplifyOptions.LockBorder | hxd.tools.MeshOptimizer.SimplifyOptions.Prune;
+			indexCount = hxd.tools.MeshOptimizer.simplify(indices, indices, indexCount, vertices, vertexCount, vertexSize, Std.int(indexCount * (1.0 - decimationFactor)), decimationFactor, options, null);
+		}
 		hxd.tools.MeshOptimizer.optimizeVertexCache(indices, indices, indexCount, vertexCount);
 		hxd.tools.MeshOptimizer.optimizeOverdraw(indices, indices, indexCount, vertices, vertexCount, vertexSize, 1.05);
 		vertexCount = hxd.tools.MeshOptimizer.optimizeVertexFetch(vertices, indices, indexCount, vertices, vertexCount, vertexSize);
@@ -817,7 +835,7 @@ class HMDOut extends BaseLibrary {
 		return { lodLevel : -1, modelName : null };
 	}
 
-	function buildGeomCollider( d : hxd.fmt.hmd.Data, format : hxd.BufferFormat, vbuf : FloatBuffer, ibufs : Array<Array<Int>>, dataOut : haxe.io.BytesOutput ) {
+	function buildGeomCollider( d : hxd.fmt.hmd.Data, format : hxd.BufferFormat, vbuf : FloatBuffer, ibufs : Array<Array<Int>>, dataOut : haxe.io.BytesOutput ) : MeshCollider {
 		var vertexCount = Std.int(vbuf.length / format.stride);
 		var indexCount = 0;
 		for( idx in ibufs ) {
@@ -833,10 +851,10 @@ class HMDOut extends BaseLibrary {
 			}
 		}
 
-		var collider = new Collider();
+		var collider = new MeshCollider();
 		collider.vertexPosition = dataOut.length;
-		collider.vertexCounts = [vertexCount];
-		collider.indexCounts = [indexCount];
+		collider.vertexCount = vertexCount;
+		collider.indexCount = indexCount;
 		iterVertex(function(x, y, z) {
 			dataOut.writeFloat(x);
 			dataOut.writeFloat(y);
@@ -860,7 +878,7 @@ class HMDOut extends BaseLibrary {
 	}
 
 
-	function buildAutoColliders( d : hxd.fmt.hmd.Data, format : hxd.BufferFormat, vbuf : FloatBuffer, ibufs : Array<Array<Int>>, mids : Array<Int>, bounds : h3d.col.Bounds, generateCollides : CollideParams, dataOut : haxe.io.BytesOutput ) {
+	function buildAutoColliders( d : hxd.fmt.hmd.Data, format : hxd.BufferFormat, vbuf : FloatBuffer, ibufs : Array<Array<Int>>, mids : Array<Int>, bounds : h3d.col.Bounds, generateCollides : CollideParams, dataOut : haxe.io.BytesOutput ) : ConvexHullsCollider {
 		var maxConvexHulls = generateCollides.maxConvexHulls;
 		var dim = bounds.dimension();
 		var prec = Math.min(dim, generateCollides.precision);
@@ -1027,7 +1045,7 @@ class HMDOut extends BaseLibrary {
 		sys.FileSystem.deleteFile(outFile);
 		#end
 
-		var collider = new Collider();
+		var collider = new ConvexHullsCollider();
 		collider.vertexCounts = [];
 		collider.indexCounts = [];
 		var is32 = [];
@@ -1061,6 +1079,47 @@ class HMDOut extends BaseLibrary {
 		}
 
 		return collider;
+	}
+
+	function buildShapeColliders( d : hxd.fmt.hmd.Data, shapes : Array<ShapeColliderParams> ) : GroupCollider {
+		var group = new GroupCollider();
+		group.colliders = [];
+		for( cp in shapes ) {
+			switch( cp.type ) {
+			case Sphere:
+				var c = new SphereCollider();
+				if( cp.position == null )
+					throw "Invalid SphereCollider params";
+				c.position = cp.position;
+				c.radius = cp.radius;
+				group.colliders.push(c);
+			case Box:
+				var c = new BoxCollider();
+				if( cp.position == null || cp.halfExtent == null )
+					throw "Invalid BoxCollider params";
+				c.position = cp.position;
+				c.halfExtent = cp.halfExtent;
+				c.rotation = cp.rotation;
+				group.colliders.push(c);
+			case Capsule:
+				var c = new CapsuleCollider();
+				if( cp.position == null || cp.halfExtent == null )
+					throw "Invalid CapsuleCollider params";
+				c.position = cp.position;
+				c.halfExtent = cp.halfExtent;
+				c.radius = cp.radius;
+				group.colliders.push(c);
+			case Cylinder:
+				var c = new CylinderCollider();
+				if( cp.position == null || cp.halfExtent == null )
+					throw "Invalid CapsuleCollider params";
+				c.position = cp.position;
+				c.halfExtent = cp.halfExtent;
+				c.radius = cp.radius;
+				group.colliders.push(c);
+			}
+		}
+		return group;
 	}
 
 	function addModels(includeGeometry) {
@@ -1428,7 +1487,7 @@ class HMDOut extends BaseLibrary {
 			for( idx => mc in mcs ) {
 				if( mc == null )
 					continue;
-				var collider = null;
+				var collider : Collider = null;
 				var collidersParams = mc;
 				if( mc.useDefault ) {
 					collidersParams = generateCollides;
@@ -1446,10 +1505,17 @@ class HMDOut extends BaseLibrary {
 						collider = buildAutoColliders(d, gdataCol.format, gdataCol.vbuf, gdataCol.ibufs, gdataCol.mids, geom.bounds, collidersParams, dataOut);
 					} else if( collidersParams.mesh != null ) {
 						collider = buildGeomCollider(d, gdataCol.format, gdataCol.vbuf, gdataCol.ibufs, dataOut);
+					} else if( collidersParams.shapes != null ) {
+						collider = buildShapeColliders(d, collidersParams.shapes);
 					}
 				}
 				if( collider != null ) {
 					var colliderId = d.colliders.length;
+					if( collider.type != ConvexHulls ) {
+						if( d.props == null ) d.props = [];
+						if( !d.props.contains(HasCustomCollider) )
+							d.props.push(HasCustomCollider);
+					}
 					d.colliders.push(collider);
 					if( idx == 0 ) {
 						model.collider = colliderId;

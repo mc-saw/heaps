@@ -198,6 +198,14 @@ class Renderer extends h3d.scene.Renderer {
 			pbrLightPass.enableLights = true;
 		}
 		ctx.pbrLightPass = pbrLightPass;
+
+		var defaultVec = new h3d.Vector(0.0, 0.0, 0.0);
+		ctx.setGlobal("mainLightColor", defaultVec);
+		ctx.setGlobal("mainLightPower", 0);
+		ctx.setGlobal("mainLightPos", defaultVec);
+		ctx.setGlobal("mainLightDir", new h3d.Vector(0.0, 0.0, 1.0));
+		ctx.setGlobal("mainLightShadowMap", null);
+		ctx.setGlobal("mainLightViewProj", h3d.Matrix.I());
 	}
 
 	inline function cullPasses( passes : h3d.pass.PassList, f : h3d.col.Collider -> Bool ) {
@@ -473,6 +481,7 @@ class Renderer extends h3d.scene.Renderer {
 		ctx.setGlobal("ldrMap", textures.ldr);
 		ctx.setGlobal("velocity", textures.velocity);
 		ctx.setGlobal("global.time", ctx.time);
+		ctx.setGlobal("DIFFUSE_ONLY", renderMode == LightProbe);
 		if(ctx.camera != null){
 			ctx.setGlobal("camera.position", ctx.camera.pos);
 			ctx.setGlobal("camera.inverseViewProj", ctx.camera.getInverseViewProj());
